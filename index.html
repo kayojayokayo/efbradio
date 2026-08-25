@@ -1,9 +1,9 @@
-<!DOCTYPE html>
+html_code = """<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>CometJet EFB Live Radio Widget</title>
+    <title>CometJet EFB Radio Widget</title>
     <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;600;700;800;900&display=swap" rel="stylesheet">
     <style>
         :root {
@@ -230,20 +230,20 @@
             </div>
             <div class="pilots-online-pill">
                 <span class="status-dot"></span>
-                <span id="pilotsCount">0 ONLINE</span>
+                <span id="pilotsCount">1 ONLINE</span>
             </div>
         </div>
 
         <div class="freq-display-card">
             <div class="freq-info">
                 <span class="freq-label">CHANNEL STATUS</span>
-                <span class="freq-status" id="channelStatus">CONNECTING...</span>
+                <span class="freq-status" id="channelStatus">CONNECTED</span>
             </div>
             <button class="disconnect-btn" id="toggleConnectBtn" onclick="toggleConnection()">DISCONNECT</button>
         </div>
 
         <div class="ptt-container">
-            <button class="ptt-button" id="pttBtn" disabled>
+            <button class="ptt-button" id="pttBtn">
                 <div class="tx-indicator" style="display: none;" id="txAnim">
                     <div class="tx-bar"></div>
                     <div class="tx-bar"></div>
@@ -256,49 +256,29 @@
     </div>
 
     <script>
-        // WebSocket & Audio State
-        const SERVER_URL = "ws://localhost:8080"; // Zmień na swój adres IP / domeny serwera
-        let ws = null;
-        let isConnected = false;
+        let isConnected = true;
         let isTransmitting = false;
 
         let audioCtx = null;
         let mediaStream = null;
         let mediaRecorder = null;
-
-        // Audio Filter Nodes for incoming voices
-        let radioFilterHead = null;
+        let audioChunks = [];
 
         function initAudioContext() {
             if (!audioCtx) {
                 const AudioContext = window.AudioContext || window.webkitAudioContext;
                 audioCtx = new AudioContext();
-
-                // Build Radio Audio Pipeline for Incoming Voice (VHF Filter + Distortion)
-                const highpass = audioCtx.createBiquadFilter();
-                highpass.type = 'highpass';
-                highpass.frequency.value = 400;
-
-                const lowpass = audioCtx.createBiquadFilter();
-                lowpass.type = 'lowpass';
-                lowpass.frequency.value = 2800;
-
-                const distortion = audioCtx.createWaveShaper();
-                distortion.curve = makeDistortionCurve(15);
-
-                highpass.connect(lowpass);
-                lowpass.connect(distortion);
-                distortion.connect(audioCtx.destination);
-
-                radioFilterHead = highpass;
             }
             if (audioCtx.state === 'suspended') {
                 audioCtx.resume();
             }
         }
 
-        function makeDistortionCurve(amount = 15) {
-            const k = amount, n = 44100, curve = new Float32Array(n), deg = Math.PI / 180;
+        function createDistortionCurve(amount = 25) {
+            const k = amount;
+            const n = 44100;
+            const curve = new Float32Array(n);
+            const deg = Math.PI / 180;
             for (let i = 0; i < n; ++i) {
                 const x = (i * 2) / n - 1;
                 curve[i] = ((3 + k) * x * 20 * deg) / (Math.PI + k * Math.abs(x));
@@ -306,77 +286,30 @@
             return curve;
         }
 
-        function connectWebSocket() {
-            ws = new WebSocket(SERVER_URL);
-            ws.binaryType = 'arraybuffer';
-
-            ws.onopen = () => {
-                isConnected = true;
-                updateStatusUI(true);
-            };
-
-            ws.onmessage = (event) => {
-                if (typeof event.data === 'string') {
-                    const data = JSON.parse(event.data);
-                    if (data.type === 'COUNT_UPDATE') {
-                        document.getElementById('pilotsCount').textContent = `${data.count} ONLINE`;
-                    }
-                } else if (event.data instanceof ArrayBuffer) {
-                    // Play incoming audio stream from other pilots
-                    playIncomingAudio(event.data);
-                }
-            };
-
-            ws.onclose = () => {
-                isConnected = false;
-                updateStatusUI(false);
-            };
-
-            ws.onerror = (err) => {
-                console.error("WS Error:", err);
-                isConnected = false;
-                updateStatusUI(false);
-            };
-        }
-
-        async function playIncomingAudio(arrayBuffer) {
-            initAudioContext();
-            try {
-                const audioBuffer = await audioCtx.decodeAudioData(arrayBuffer);
-                const source = audioCtx.createBufferSource();
-                source.buffer = audioBuffer;
-                // Przepuszczamy głos INNYCH przez filtr radiowy do głośników
-                source.connect(radioFilterHead);
-                source.start();
-            } catch (e) {
-                // Fragment audio w trakcie dekodowania
-            }
-        }
-
         async function startTransmission() {
             if (!isConnected || isTransmitting) return;
             initAudioContext();
 
             try {
-                mediaStream = await navigator.mediaDevices.getUserMedia({
-                    audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false },
-                    video: false
-                });
-
+                mediaStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
                 isTransmitting = true;
                 updatePTTUI(true);
 
-                // Streamowanie głosu do WebSocket w małych paczkach (brak odsłuchu samego siebie)
-                mediaRecorder = new MediaRecorder(mediaStream, { mimeType: 'audio/webm;codecs=opus' });
+                audioChunks = [];
+                mediaRecorder = new MediaRecorder(mediaStream);
                 mediaRecorder.ondataavailable = (e) => {
-                    if (e.data.size > 0 && ws && ws.readyState === WebSocket.OPEN) {
-                        e.data.arrayBuffer().then(buffer => ws.send(buffer));
-                    }
+                    if (e.data.size > 0) audioChunks.push(e.data);
                 };
-                mediaRecorder.start(100); // Wysyłaj pakiet co 100ms
 
+                mediaRecorder.onstop = async () => {
+                    const audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
+                    const arrayBuffer = await audioBlob.arrayBuffer();
+                    playRadioEffect(arrayBuffer);
+                };
+
+                mediaRecorder.start();
             } catch (err) {
-                console.error("Mic error:", err);
+                console.error("Brak dostępu do mikrofonu:", err);
                 stopTransmission();
             }
         }
@@ -390,22 +323,53 @@
                 mediaRecorder.stop();
             }
             if (mediaStream) {
-                mediaStream.getTracks().forEach(t => t.stop());
+                mediaStream.getTracks().forEach(track => track.stop());
                 mediaStream = null;
             }
         }
 
-        function updateStatusUI(connected) {
+        async function playRadioEffect(arrayBuffer) {
+            try {
+                const decodedData = await audioCtx.decodeAudioData(arrayBuffer);
+                const source = audioCtx.createBufferSource();
+                source.buffer = decodedData;
+
+                // Pasmo radiowe VHF (Highpass + Lowpass + WaveShaper Distortion)
+                const highpass = audioCtx.createBiquadFilter();
+                highpass.type = 'highpass';
+                highpass.frequency.value = 400;
+
+                const lowpass = audioCtx.createBiquadFilter();
+                lowpass.type = 'lowpass';
+                lowpass.frequency.value = 2800;
+
+                const distortion = audioCtx.createWaveShaper();
+                distortion.curve = createDistortionCurve(20);
+
+                source.connect(highpass);
+                highpass.connect(lowpass);
+                lowpass.connect(distortion);
+                distortion.connect(audioCtx.destination);
+
+                source.start(0);
+            } catch (e) {
+                console.error("Błąd odtwarzania audio:", e);
+            }
+        }
+
+        function toggleConnection() {
+            isConnected = !isConnected;
             const statusEl = document.getElementById('channelStatus');
             const btnEl = document.getElementById('toggleConnectBtn');
             const pttBtn = document.getElementById('pttBtn');
 
-            if (connected) {
+            if (isConnected) {
                 statusEl.textContent = 'CONNECTED';
                 statusEl.classList.remove('disconnected');
                 btnEl.textContent = 'DISCONNECT';
                 btnEl.classList.remove('connect-state');
                 pttBtn.disabled = false;
+                document.getElementById('pilotsCount').textContent = `1 ONLINE`;
             } else {
                 statusEl.textContent = 'DISCONNECTED';
                 statusEl.classList.add('disconnected');
@@ -413,14 +377,6 @@
                 btnEl.classList.add('connect-state');
                 pttBtn.disabled = true;
                 document.getElementById('pilotsCount').textContent = `0 ONLINE`;
-            }
-        }
-
-        function toggleConnection() {
-            if (isConnected) {
-                if (ws) ws.close();
-            } else {
-                connectWebSocket();
             }
         }
 
@@ -458,9 +414,12 @@
                 stopTransmission();
             }
         });
-
-        // Auto-connect on startup
-        connectWebSocket();
     </script>
 </body>
 </html>
+"""
+
+with open("efb_radio_standalone_widget.html", "w", encoding="utf-8") as f:
+    f.write(html_code)
+
+print("STANDALONE_WIDGET_CREATED")
