@@ -1,10 +1,11 @@
-html_code = """<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>CometJet EFB Radio Widget</title>
+    <title>CometJet EFB P2P Live Radio</title>
     <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;600;700;800;900&display=swap" rel="stylesheet">
+    <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
     <style>
         :root {
             --accent: #fbc02d;
@@ -15,411 +16,157 @@ html_code = """<!DOCTYPE html>
             --border: #222222;
             --border-light: #333333;
             --text: #ffffff;
-            --text-muted: #888888;
             --text-dim: #666666;
             --danger: #e53935;
             --success: #4caf50;
         }
 
-        * {
-            box-sizing: border-box;
-            margin: 0;
-            padding: 0;
-            font-family: 'Montserrat', sans-serif;
-            -webkit-tap-highlight-color: transparent;
-            user-select: none;
-        }
-
-        body {
-            background-color: var(--bg-main);
-            color: var(--text);
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            min-height: 100vh;
-            padding: 20px;
-        }
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Montserrat', sans-serif; }
+        body { background-color: var(--bg-main); color: var(--text); display: flex; justify-content: center; align-items: center; min-height: 100vh; padding: 20px; }
 
         .efb-radio-widget {
-            width: 320px;
+            width: 330px;
             background-color: var(--bg-card);
             border: 1px solid var(--border);
             border-radius: 12px;
             padding: 16px;
-            box-shadow: 0 12px 30px rgba(0, 0, 0, 0.7);
-            display: flex;
-            flex-direction: column;
-            gap: 14px;
+            display: flex; flex-direction: column; gap: 12px;
         }
 
-        .radio-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            border-bottom: 1px solid var(--border);
-            padding-bottom: 10px;
-        }
-
-        .radio-title-group {
-            display: flex;
-            align-items: center;
-            gap: 8px;
-        }
-
-        .radio-icon {
-            color: var(--accent);
-            font-size: 16px;
-        }
-
-        .radio-title {
-            font-size: 12px;
-            font-weight: 800;
-            letter-spacing: 1.5px;
-            text-transform: uppercase;
-        }
+        .radio-header { display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border); padding-bottom: 10px; }
+        .radio-title { font-size: 12px; font-weight: 800; letter-spacing: 1.5px; }
 
         .pilots-online-pill {
-            background-color: var(--bg-card-alt);
-            border: 1px solid var(--border-light);
-            border-radius: 20px;
-            padding: 3px 10px;
-            font-size: 10px;
-            font-weight: 800;
-            color: var(--accent);
-            display: flex;
-            align-items: center;
-            gap: 6px;
+            background-color: var(--bg-card-alt); border: 1px solid var(--border-light);
+            border-radius: 20px; padding: 3px 10px; font-size: 10px; font-weight: 800; color: var(--accent);
+            display: flex; align-items: center; gap: 6px;
         }
+        .status-dot { width: 6px; height: 6px; background-color: var(--success); border-radius: 50%; }
 
-        .pilots-online-pill .status-dot {
-            width: 6px;
-            height: 6px;
-            background-color: var(--success);
-            border-radius: 50%;
-            box-shadow: 0 0 6px var(--success);
+        .peer-info-box { background: var(--bg-card-alt); border: 1px solid var(--border-light); padding: 10px; border-radius: 8px; font-size: 11px; }
+        .peer-id-text { color: var(--accent); font-weight: 800; font-family: monospace; }
+
+        .join-box { display: flex; gap: 6px; }
+        .join-input {
+            flex: 1; background: #000; border: 1px solid var(--border-light); color: #fff;
+            padding: 6px 10px; border-radius: 6px; font-size: 11px; font-family: monospace;
         }
-
-        .freq-display-card {
-            background-color: var(--bg-card-alt);
-            border: 1px solid var(--border-light);
-            border-radius: 8px;
-            padding: 12px 16px;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-        }
-
-        .freq-info {
-            display: flex;
-            flex-direction: column;
-        }
-
-        .freq-label {
-            font-size: 9px;
-            font-weight: 700;
-            color: var(--text-dim);
-            text-transform: uppercase;
-        }
-
-        .freq-status {
-            font-size: 11px;
-            font-weight: 800;
-            color: var(--success);
-            text-transform: uppercase;
-            margin-top: 2px;
-        }
-
-        .freq-status.disconnected {
-            color: var(--text-dim);
-        }
-
-        .disconnect-btn {
-            background-color: rgba(229, 57, 53, 0.15);
-            border: 1px solid var(--danger);
-            color: var(--danger);
-            border-radius: 6px;
-            padding: 8px 14px;
-            font-size: 10px;
-            font-weight: 800;
-            text-transform: uppercase;
-            cursor: pointer;
-        }
-
-        .disconnect-btn.connect-state {
-            background-color: rgba(76, 175, 80, 0.15);
-            border-color: var(--success);
-            color: var(--success);
-        }
-
-        .ptt-container {
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            gap: 8px;
+        .connect-btn {
+            background: rgba(76, 175, 80, 0.2); border: 1px solid var(--success); color: var(--success);
+            padding: 6px 12px; border-radius: 6px; font-size: 10px; font-weight: 800; cursor: pointer;
         }
 
         .ptt-button {
-            width: 100%;
-            height: 52px;
-            background: linear-gradient(180deg, var(--bg-card-alt) 0%, #08080a 100%);
-            border: 2px solid var(--accent);
-            border-radius: 8px;
-            color: var(--accent);
-            font-size: 13px;
-            font-weight: 900;
-            letter-spacing: 2px;
-            text-transform: uppercase;
-            cursor: pointer;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            gap: 10px;
+            width: 100%; height: 50px; background: var(--bg-card-alt);
+            border: 2px solid var(--accent); border-radius: 8px; color: var(--accent);
+            font-weight: 900; letter-spacing: 2px; cursor: pointer;
         }
-
-        .ptt-button:active:not(:disabled), .ptt-button.active {
-            background: linear-gradient(180deg, var(--accent) 0%, var(--accent-dark) 100%);
-            color: #000000;
-        }
-
-        .ptt-button:disabled {
-            opacity: 0.35;
-            border-color: var(--border-light);
-            color: var(--text-muted);
-            cursor: not-allowed;
-        }
-
-        .ptt-hint {
-            font-size: 9px;
-            font-weight: 700;
-            color: var(--text-dim);
-            text-transform: uppercase;
-        }
-
-        .tx-indicator {
-            display: flex;
-            align-items: center;
-            gap: 3px;
-            height: 12px;
-        }
-
-        .tx-bar {
-            width: 3px;
-            height: 100%;
-            background-color: currentColor;
-            border-radius: 2px;
-            animation: txPulse 0.6s infinite ease-in-out alternate;
-        }
-
-        .tx-bar:nth-child(1) { animation-delay: 0.1s; }
-        .tx-bar:nth-child(2) { animation-delay: 0.3s; }
-        .tx-bar:nth-child(3) { animation-delay: 0.2s; }
-
-        @keyframes txPulse {
-            0% { transform: scaleY(0.3); }
-            100% { transform: scaleY(1); }
-        }
+        .ptt-button:active, .ptt-button.active { background: var(--accent); color: #000; }
     </style>
 </head>
 <body>
 
     <div class="efb-radio-widget">
         <div class="radio-header">
-            <div class="radio-title-group">
-                <span class="radio-icon">📻</span>
-                <span class="radio-title">RADIO COMM</span>
-            </div>
+            <span class="radio-title">📻 RADIO P2P</span>
             <div class="pilots-online-pill">
                 <span class="status-dot"></span>
-                <span id="pilotsCount">1 ONLINE</span>
+                <span id="pilotsCount">1 NA CZĘSTOTLIWOŚCI</span>
             </div>
         </div>
 
-        <div class="freq-display-card">
-            <div class="freq-info">
-                <span class="freq-label">CHANNEL STATUS</span>
-                <span class="freq-status" id="channelStatus">CONNECTED</span>
-            </div>
-            <button class="disconnect-btn" id="toggleConnectBtn" onclick="toggleConnection()">DISCONNECT</button>
+        <div class="peer-info-box">
+            <span>TWÓJ KOD RADIA: </span>
+            <span class="peer-id-text" id="myPeerId">GENEROWANIE...</span>
         </div>
 
-        <div class="ptt-container">
-            <button class="ptt-button" id="pttBtn">
-                <div class="tx-indicator" style="display: none;" id="txAnim">
-                    <div class="tx-bar"></div>
-                    <div class="tx-bar"></div>
-                    <div class="tx-bar"></div>
-                </div>
-                <span id="pttText">PUSH TO TALK</span>
-            </button>
-            <span class="ptt-hint">HOLD SPACEBAR OR TAP TO TRANSMIT</span>
+        <div class="join-box">
+            <input type="text" id="targetPeerId" class="join-input" placeholder="Wpisz kod drugiego radia...">
+            <button class="connect-btn" onclick="connectToPeer()">POŁĄCZ</button>
         </div>
+
+        <button class="ptt-button" id="pttBtn" onmousedown="startTx()" onmouseup="stopTx()" ontouchstart="startTx()" ontouchend="stopTx()">
+            PUSH TO TALK
+        </button>
     </div>
 
     <script>
-        let isConnected = true;
-        let isTransmitting = false;
+        let peer = null;
+        let localStream = null;
+        let activeCalls = [];
+        let connectedPeersCount = 1;
 
-        let audioCtx = null;
-        let mediaStream = null;
-        let mediaRecorder = null;
-        let audioChunks = [];
+        // Audio Context do odbierania i nakładania filtra radiowego na głos INNYCH
+        const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
 
-        function initAudioContext() {
-            if (!audioCtx) {
-                const AudioContext = window.AudioContext || window.webkitAudioContext;
-                audioCtx = new AudioContext();
-            }
-            if (audioCtx.state === 'suspended') {
-                audioCtx.resume();
-            }
+        function createRadioFilter(stream) {
+            const source = audioCtx.createMediaStreamSource(stream);
+            
+            const highpass = audioCtx.createBiquadFilter();
+            highpass.type = 'highpass';
+            highpass.frequency.value = 400;
+
+            const lowpass = audioCtx.createBiquadFilter();
+            lowpass.type = 'lowpass';
+            lowpass.frequency.value = 2800;
+
+            source.connect(highpass);
+            highpass.connect(lowpass);
+            lowpass.connect(audioCtx.destination);
         }
 
-        function createDistortionCurve(amount = 25) {
-            const k = amount;
-            const n = 44100;
-            const curve = new Float32Array(n);
-            const deg = Math.PI / 180;
-            for (let i = 0; i < n; ++i) {
-                const x = (i * 2) / n - 1;
-                curve[i] = ((3 + k) * x * 20 * deg) / (Math.PI + k * Math.abs(x));
-            }
-            return curve;
-        }
+        // Inicjalizacja P2P
+        navigator.mediaDevices.getUserMedia({ audio: true }).then(stream => {
+            localStream = stream;
+            // Wyłączamy domyślnie mikrofon (wyciszenie PTT)
+            localStream.getAudioTracks()[0].enabled = false;
 
-        async function startTransmission() {
-            if (!isConnected || isTransmitting) return;
-            initAudioContext();
+            peer = new Peer();
 
-            try {
-                mediaStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
-                isTransmitting = true;
-                updatePTTUI(true);
+            peer.on('open', id => {
+                document.getElementById('myPeerId').textContent = id;
+            });
 
-                audioChunks = [];
-                mediaRecorder = new MediaRecorder(mediaStream);
-                mediaRecorder.ondataavailable = (e) => {
-                    if (e.data.size > 0) audioChunks.push(e.data);
-                };
-
-                mediaRecorder.onstop = async () => {
-                    const audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
-                    const arrayBuffer = await audioBlob.arrayBuffer();
-                    playRadioEffect(arrayBuffer);
-                };
-
-                mediaRecorder.start();
-            } catch (err) {
-                console.error("Brak dostępu do mikrofonu:", err);
-                stopTransmission();
-            }
-        }
-
-        function stopTransmission() {
-            if (!isTransmitting) return;
-            isTransmitting = false;
-            updatePTTUI(false);
-
-            if (mediaRecorder && mediaRecorder.state !== 'inactive') {
-                mediaRecorder.stop();
-            }
-            if (mediaStream) {
-                mediaStream.getTracks().forEach(track => track.stop());
-                mediaStream = null;
-            }
-        }
-
-        async function playRadioEffect(arrayBuffer) {
-            try {
-                const decodedData = await audioCtx.decodeAudioData(arrayBuffer);
-                const source = audioCtx.createBufferSource();
-                source.buffer = decodedData;
-
-                // Pasmo radiowe VHF (Highpass + Lowpass + WaveShaper Distortion)
-                const highpass = audioCtx.createBiquadFilter();
-                highpass.type = 'highpass';
-                highpass.frequency.value = 400;
-
-                const lowpass = audioCtx.createBiquadFilter();
-                lowpass.type = 'lowpass';
-                lowpass.frequency.value = 2800;
-
-                const distortion = audioCtx.createWaveShaper();
-                distortion.curve = createDistortionCurve(20);
-
-                source.connect(highpass);
-                highpass.connect(lowpass);
-                lowpass.connect(distortion);
-                distortion.connect(audioCtx.destination);
-
-                source.start(0);
-            } catch (e) {
-                console.error("Błąd odtwarzania audio:", e);
-            }
-        }
-
-        function toggleConnection() {
-            isConnected = !isConnected;
-            const statusEl = document.getElementById('channelStatus');
-            const btnEl = document.getElementById('toggleConnectBtn');
-            const pttBtn = document.getElementById('pttBtn');
-
-            if (isConnected) {
-                statusEl.textContent = 'CONNECTED';
-                statusEl.classList.remove('disconnected');
-                btnEl.textContent = 'DISCONNECT';
-                btnEl.classList.remove('connect-state');
-                pttBtn.disabled = false;
-                document.getElementById('pilotsCount').textContent = `1 ONLINE`;
-            } else {
-                statusEl.textContent = 'DISCONNECTED';
-                statusEl.classList.add('disconnected');
-                btnEl.textContent = 'CONNECT';
-                btnEl.classList.add('connect-state');
-                pttBtn.disabled = true;
-                document.getElementById('pilotsCount').textContent = `0 ONLINE`;
-            }
-        }
-
-        function updatePTTUI(active) {
-            const btn = document.getElementById('pttBtn');
-            const txt = document.getElementById('pttText');
-            const anim = document.getElementById('txAnim');
-
-            if (active) {
-                btn.classList.add('active');
-                txt.textContent = 'TRANSMITTING...';
-                anim.style.display = 'flex';
-            } else {
-                btn.classList.remove('active');
-                txt.textContent = 'PUSH TO TALK';
-                anim.style.display = 'none';
-            }
-        }
-
-        const pttBtn = document.getElementById('pttBtn');
-        pttBtn.addEventListener('mousedown', (e) => { e.preventDefault(); startTransmission(); });
-        window.addEventListener('mouseup', () => { if (isTransmitting) stopTransmission(); });
-        pttBtn.addEventListener('touchstart', (e) => { e.preventDefault(); startTransmission(); });
-        pttBtn.addEventListener('touchend', (e) => { e.preventDefault(); stopTransmission(); });
-
-        window.addEventListener('keydown', (e) => {
-            if (e.code === 'Space' && !e.repeat && document.activeElement.tagName !== 'INPUT') {
-                e.preventDefault();
-                startTransmission();
-            }
+            // Odbieranie połączenia od innego gracza
+            peer.on('call', call => {
+                call.answer(localStream);
+                call.on('stream', remoteStream => {
+                    createRadioFilter(remoteStream);
+                });
+                updateCount(1);
+            });
         });
-        window.addEventListener('keyup', (e) => {
-            if (e.code === 'Space') {
-                e.preventDefault();
-                stopTransmission();
+
+        function connectToPeer() {
+            const targetId = document.getElementById('targetPeerId').value.trim();
+            if (!targetId || !peer) return;
+
+            const call = peer.call(targetId, localStream);
+            call.on('stream', remoteStream => {
+                createRadioFilter(remoteStream);
+            });
+            updateCount(1);
+        }
+
+        function startTx() {
+            if (audioCtx.state === 'suspended') audioCtx.resume();
+            if (localStream) {
+                localStream.getAudioTracks()[0].enabled = true; // Włącz mikrofon (wysyła na żywo)
+                document.getElementById('pttBtn').classList.add('active');
             }
-        });
+        }
+
+        function stopTx() {
+            if (localStream) {
+                localStream.getAudioTracks()[0].enabled = false; // Wycisz mikrofon
+                document.getElementById('pttBtn').classList.remove('active');
+            }
+        }
+
+        function updateCount(delta) {
+            connectedPeersCount += delta;
+            document.getElementById('pilotsCount').textContent = `${connectedPeersCount} NA CZĘSTOTLIWOŚCI`;
+        }
     </script>
 </body>
 </html>
-"""
-
-with open("efb_radio_standalone_widget.html", "w", encoding="utf-8") as f:
-    f.write(html_code)
-
-print("STANDALONE_WIDGET_CREATED")
