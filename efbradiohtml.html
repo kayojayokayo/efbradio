@@ -1,0 +1,278 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>EFB Radio Simulator (WebRTC)</title>
+    <style>
+        body {
+            background-color: #1a1d20;
+            color: #ffffff;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+        }
+        .radio-container {
+            background-color: #2c3034;
+            padding: 30px;
+            border-radius: 12px;
+            box-shadow: 0 8px 24px rgba(0,0,0,0.5);
+            text-align: center;
+            width: 340px;
+            border: 2px solid #3a3f44;
+        }
+        .setup-box {
+            margin-bottom: 20px;
+        }
+        input {
+            background: #0b0c0d;
+            border: 1px solid #3a3f44;
+            color: #00ff66;
+            padding: 8px;
+            font-size: 1rem;
+            border-radius: 4px;
+            width: 80%;
+            text-align: center;
+            margin-bottom: 10px;
+        }
+        button.connect-btn {
+            background-color: #007bff;
+            color: white;
+            border: none;
+            padding: 8px 15px;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        .frequency {
+            font-family: 'Courier New', Courier, monospace;
+            background-color: #0b0c0d;
+            color: #00ff66;
+            font-size: 2.2rem;
+            padding: 10px;
+            border-radius: 6px;
+            margin-bottom: 20px;
+            letter-spacing: 2px;
+            box-shadow: inset 0 0 10px rgba(0,255,102,0.3);
+        }
+        .ptt-btn {
+            background-color: #dc3545;
+            color: white;
+            border: none;
+            padding: 25px 40px;
+            font-size: 1.3rem;
+            font-weight: bold;
+            border-radius: 50px;
+            cursor: pointer;
+            user-select: none;
+            outline: none;
+            width: 100%;
+            box-shadow: 0 4px 15px rgba(220, 53, 69, 0.4);
+            transition: all 0.1s ease;
+        }
+        .ptt-btn:disabled {
+            background-color: #555 !important;
+            box-shadow: none;
+            cursor: not-allowed;
+        }
+        .ptt-btn:active, .ptt-btn.transmitting {
+            background-color: #28a745;
+            box-shadow: 0 4px 20px rgba(40, 167, 69, 0.6);
+        }
+        .status {
+            margin-top: 15px;
+            font-size: 0.85rem;
+            color: #a0aab2;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+    </style>
+</head>
+<body>
+
+<div class="radio-container">
+    <div class="status">EFB INTERCOM SYSTEM</div>
+    
+    <!-- Sekcja parowania -->
+    <div class="setup-box" id="setupSection">
+        <input type="text" id="roomInput" placeholder="ID sesji (np. PILOT12)" value="PILOT12">
+        <button class="connect-btn" onclick="startSession()">POŁĄCZ RADIO</button>
+    </div>
+
+    <div class="frequency" id="freqDisplay">---.---</div>
+    
+    <!-- Przycisk Push-to-Talk (aktywowany po połączeniu) -->
+    <button class="ptt-btn" id="pttButton" disabled>PUSH TO TALK</button>
+    
+    <div class="status" id="radioStatus">DISCONNECTED</div>
+</div>
+
+<!-- Element do odtwarzania odebranego dźwięku -->
+<audio id="remoteAudio" autoplay></audio>
+
+<script>
+    // Publiczny broker WebSocket (PieSocket) do wymiany danych zestawiania połączenia
+    const apiKey = "oZBlDb667Yv5T0X7Mcl5PqT7U7X8W9A0"; 
+    let socket;
+    let peerConnection;
+    let roomID;
+    
+    let audioCtx;
+    let localStream;
+    let micGain;
+    
+    const pttButton = document.getElementById('pttButton');
+    const radioStatus = document.getElementById('radioStatus');
+    const remoteAudio = document.getElementById('remoteAudio');
+
+    const rtcConfig = {
+        iceServers: [{ urls: "stun:://google.com" }]
+    };
+
+    // 1. FILTRY I ARCHITEKTURA AUDIO VHF
+    async function initAudioFX() {
+        if (audioCtx) return;
+        audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        
+        // Pobranie strumienia bez automatycznego tłumienia, aby zachować surowy klimat VHF
+        localStream = await navigator.mediaDevices.getUserMedia({ 
+            audio: { echoCancellation: true, noiseSuppression: false, autoGainControl: false } 
+        });
+
+        const sourceNode = audioCtx.createMediaStreamSource(localStream);
+        
+        // Bandpass Filter: obcina skrajne pasma, zostawiając środek (efekt głośnika radiowego)
+        const vhfFilter = audioCtx.createBiquadFilter();
+        vhfFilter.type = "bandpass";
+        vhfFilter.frequency.value = 1300;
+        vhfFilter.Q.value = 1.2;
+
+        // Kontrola blokady szumów (Squelch) realizowana przez PTT
+        micGain = audioCtx.createGain();
+        micGain.gain.value = 0; // Domyślnie wyciszone
+
+        sourceNode.connect(vhfFilter);
+        vhfFilter.connect(micGain);
+
+        // Tworzenie wyjściowego strumienia audio po nałożeniu filtrów
+        const dest = audioCtx.createMediaStreamDestination();
+        micGain.connect(dest);
+        return dest.stream;
+    }
+
+    // Generator dźwięku kliknięcia radia (Mic Click)
+    function playRadioClick(isRelease) {
+        if (!audioCtx) return;
+        const osc = audioCtx.createOscillator();
+        const gainNode = audioCtx.createGain();
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(isRelease ? 750 : 1100, audioCtx.currentTime);
+        gainNode.gain.setValueAtTime(0.05, audioCtx.currentTime);
+        gainNode.gain.exponentialRampToValueAtTime(0.0001, audioCtx.currentTime + 0.04);
+        osc.connect(gainNode);
+        gainNode.connect(audioCtx.destination);
+        osc.start();
+        osc.stop(audioCtx.currentTime + 0.05);
+    }
+
+    // 2. NAWIĄZYWANIE POŁĄCZENIA (WebSockets + WebRTC)
+    async function startSession() {
+        roomID = document.getElementById('roomInput').value.trim();
+        if (!roomID) return alert("Wpisz ID sesji!");
+        
+        document.getElementById('setupSection').style.display = 'none';
+        document.getElementById('freqDisplay').innerText = "118.100";
+        radioStatus.innerText = "CONNECTING...";
+
+        const processedStream = await initAudioFX();
+
+        // Podłączenie do darmowego serwera sygnalizacji
+        socket = new WebSocket(`wss://://piesocket.com{roomID}?api_key=${apiKey}`);
+
+        socket.onopen = () => {
+            setupWebRTC(processedStream);
+        };
+
+        socket.onmessage = async (event) => {
+            const data = JSON.parse(event.data);
+            
+            if (data.sdp) {
+                await peerConnection.setRemoteDescription(new RTCSessionDescription(data.sdp));
+                if (data.sdp.type === 'offer') {
+                    const answer = await peerConnection.createAnswer();
+                    await peerConnection.setLocalDescription(answer);
+                    socket.send(JSON.stringify({ sdp: peerConnection.localDescription }));
+                }
+            } else if (data.ice) {
+                try {
+                    await peerConnection.addIceCandidate(new RTCIceCandidate(data.ice));
+                } catch(e) {}
+            }
+        };
+    }
+
+    function setupWebRTC(stream) {
+        peerConnection = new RTCPeerConnection(rtcConfig);
+
+        // Przekazanie zmodulowanego dźwięku do transmisji sieciowej
+        stream.getTracks().forEach(track => peerConnection.addTrack(track, stream));
+
+        // Odebranie dźwięku od drugiego pilota
+        peerConnection.ontrack = (event) => {
+            remoteAudio.srcObject = event.streams[0];
+            radioStatus.innerText = "ONLINE (STDBY)";
+            radioStatus.style.color = "#a0aab2";
+            pttButton.disabled = false;
+        };
+
+        peerConnection.onicecandidate = (event) => {
+            if (event.candidate) {
+                socket.send(JSON.stringify({ ice: event.candidate }));
+            }
+        };
+
+        // Automatyczne wysłanie zaproszenia do połączenia po 2 sekundach
+        setTimeout(async () => {
+            try {
+                const offer = await peerConnection.createOffer();
+                await peerConnection.setLocalDescription(offer);
+                socket.send(JSON.stringify({ sdp: peerConnection.localDescription }));
+            } catch (e) {
+                // Ignoruj błąd jeśli drugie urządzenie wysłało ofertę jako pierwsze
+            }
+        }, 2000);
+    }
+
+    // 3. OBSŁUGA TRANSMISJI PUSH-TO-TALK
+    function startTransmission() {
+        if (pttButton.disabled) return;
+        playRadioClick(false);
+        setTimeout(() => {
+            if(micGain) micGain.gain.setValueAtTime(2.0, audioCtx.currentTime); // Otwarcie mikrofonu i podbicie sygnału
+            radioStatus.innerText = "TX TRANSMITTING";
+            radioStatus.style.color = "#28a745";
+        }, 40);
+    }
+
+    function stopTransmission() {
+        if (pttButton.disabled) return;
+        if(micGain && micGain.gain.value > 0) {
+            micGain.gain.setValueAtTime(0, audioCtx.currentTime); // Squelch (odcięcie szumu)
+            playRadioClick(true);
+            radioStatus.innerText = "ONLINE (STDBY)";
+            radioStatus.style.color = "#a0aab2";
+        }
+    }
+
+    // Detekcja zdarzeń (Mysz, Dotyk iPad/Tablet, Spacja)
+    pttButton.addEventListener('mousedown', startTransmission);
+    pttButton.addEventListener('mouseup', stopTransmission);
+    pttButton.addEventListener('mouseleave', stopTransmission);
+
+    pttButton.addEventListener('touchstart', (e) => { e.preventDefault(); startTransmission(); });
+    pttButton.addEventListener('touchend', (e) => { e.preventDefault(); stopTransmission(); });
+
+    window.addEventListener('keydown', (e) => {
+        if (e.code === 'Space' && !pttButton.classList.contains('transmitting')) {pttButton.classList.add('transmitting');startTransmission();}});window.addEventListener('keyup', (e) => {if (e.code === 'Space') {pttButton.classList.remove('transmitting');stopTransmission();}});
