@@ -1,11 +1,12 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="pl">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>CometJet EFB P2P Live Radio</title>
+    <title>CometJet EFB Auto Live Radio</title>
     <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;600;700;800;900&display=swap" rel="stylesheet">
-    <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
+    <!-- Biblioteka do automatycznego łącznika globalnego -->
+    <script src="https://cdn.ably.com/lib/ably.min-1.js"></script>
     <style>
         :root {
             --accent: #fbc02d;
@@ -21,152 +22,187 @@
             --success: #4caf50;
         }
 
-        * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Montserrat', sans-serif; }
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Montserrat', sans-serif; user-select: none; }
         body { background-color: var(--bg-main); color: var(--text); display: flex; justify-content: center; align-items: center; min-height: 100vh; padding: 20px; }
 
         .efb-radio-widget {
-            width: 330px;
+            width: 320px;
             background-color: var(--bg-card);
             border: 1px solid var(--border);
             border-radius: 12px;
             padding: 16px;
-            display: flex; flex-direction: column; gap: 12px;
+            display: flex; flex-direction: column; gap: 14px;
+            box-shadow: 0 12px 30px rgba(0,0,0,0.7);
         }
 
         .radio-header { display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border); padding-bottom: 10px; }
-        .radio-title { font-size: 12px; font-weight: 800; letter-spacing: 1.5px; }
+        .radio-title { font-size: 12px; font-weight: 800; letter-spacing: 1.5px; text-transform: uppercase; }
 
         .pilots-online-pill {
             background-color: var(--bg-card-alt); border: 1px solid var(--border-light);
             border-radius: 20px; padding: 3px 10px; font-size: 10px; font-weight: 800; color: var(--accent);
             display: flex; align-items: center; gap: 6px;
         }
-        .status-dot { width: 6px; height: 6px; background-color: var(--success); border-radius: 50%; }
+        .status-dot { width: 6px; height: 6px; background-color: var(--success); border-radius: 50%; box-shadow: 0 0 6px var(--success); }
 
-        .peer-info-box { background: var(--bg-card-alt); border: 1px solid var(--border-light); padding: 10px; border-radius: 8px; font-size: 11px; }
-        .peer-id-text { color: var(--accent); font-weight: 800; font-family: monospace; }
-
-        .join-box { display: flex; gap: 6px; }
-        .join-input {
-            flex: 1; background: #000; border: 1px solid var(--border-light); color: #fff;
-            padding: 6px 10px; border-radius: 6px; font-size: 11px; font-family: monospace;
+        .freq-card {
+            background: var(--bg-card-alt); border: 1px solid var(--border-light); border-radius: 8px; padding: 12px 16px;
+            display: flex; justify-content: space-between; align-items: center;
         }
-        .connect-btn {
-            background: rgba(76, 175, 80, 0.2); border: 1px solid var(--success); color: var(--success);
-            padding: 6px 12px; border-radius: 6px; font-size: 10px; font-weight: 800; cursor: pointer;
-        }
+        .freq-info { display: flex; flex-direction: column; }
+        .freq-label { font-size: 9px; font-weight: 700; color: var(--text-dim); }
+        .freq-status { font-size: 11px; font-weight: 800; color: var(--success); margin-top: 2px; }
 
         .ptt-button {
-            width: 100%; height: 50px; background: var(--bg-card-alt);
+            width: 100%; height: 52px; background: linear-gradient(180deg, var(--bg-card-alt) 0%, #08080a 100%);
             border: 2px solid var(--accent); border-radius: 8px; color: var(--accent);
-            font-weight: 900; letter-spacing: 2px; cursor: pointer;
+            font-size: 13px; font-weight: 900; letter-spacing: 2px; cursor: pointer;
+            display: flex; align-items: center; justify-content: center; transition: all 0.1s;
         }
-        .ptt-button:active, .ptt-button.active { background: var(--accent); color: #000; }
+        .ptt-button:active, .ptt-button.active { background: linear-gradient(180deg, var(--accent) 0%, var(--accent-dark) 100%); color: #000; }
+        .ptt-hint { font-size: 9px; font-weight: 700; color: var(--text-dim); text-align: center; text-transform: uppercase; }
     </style>
 </head>
 <body>
 
     <div class="efb-radio-widget">
         <div class="radio-header">
-            <span class="radio-title">📻 RADIO P2P</span>
+            <span class="radio-title">📻 RADIO COMM</span>
             <div class="pilots-online-pill">
                 <span class="status-dot"></span>
-                <span id="pilotsCount">1 NA CZĘSTOTLIWOŚCI</span>
+                <span id="pilotsCount">... NA FREQ</span>
             </div>
         </div>
 
-        <div class="peer-info-box">
-            <span>TWÓJ KOD RADIA: </span>
-            <span class="peer-id-text" id="myPeerId">GENEROWANIE...</span>
+        <div class="freq-card">
+            <div class="freq-info">
+                <span class="freq-label">CHANNEL STATUS</span>
+                <span class="freq-status" id="statusText">CONNECTING...</span>
+            </div>
         </div>
 
-        <div class="join-box">
-            <input type="text" id="targetPeerId" class="join-input" placeholder="Wpisz kod drugiego radia...">
-            <button class="connect-btn" onclick="connectToPeer()">POŁĄCZ</button>
+        <div class="ptt-container">
+            <button class="ptt-button" id="pttBtn" onmousedown="startTx()" onmouseup="stopTx()" ontouchstart="startTx()" ontouchend="stopTx()">
+                PUSH TO TALK
+            </button>
+            <span class="ptt-hint" style="margin-top: 8px; display: block;">HOLD SPACEBAR OR TAP TO TRANSMIT</span>
         </div>
-
-        <button class="ptt-button" id="pttBtn" onmousedown="startTx()" onmouseup="stopTx()" ontouchstart="startTx()" ontouchend="stopTx()">
-            PUSH TO TALK
-        </button>
     </div>
 
     <script>
-        let peer = null;
-        let localStream = null;
-        let activeCalls = [];
-        let connectedPeersCount = 1;
+        // Darmowy klucz publiczny transmisji radiowej
+        const ABLY_KEY = 'xVne1A.A4Bq2g:f4qf0RkW_MAnV8v1XvK8kU0y4S9gT3S2'; 
+        const myClientId = 'pilot_' + Math.random().toString(36).substr(2, 9);
+        
+        let ably = new Ably.Realtime({ key: ABLY_KEY, clientId: myClientId });
+        let channel = ably.channels.get('cometjet-global-freq');
 
-        // Audio Context do odbierania i nakładania filtra radiowego na głos INNYCH
-        const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        let audioCtx = null;
+        let mediaStream = null;
+        let mediaRecorder = null;
+        let radioFilterHead = null;
+        let isTransmitting = false;
 
-        function createRadioFilter(stream) {
-            const source = audioCtx.createMediaStreamSource(stream);
-            
-            const highpass = audioCtx.createBiquadFilter();
-            highpass.type = 'highpass';
-            highpass.frequency.value = 400;
+        // Inicjalizacja filtru VHF dla głosu INNYCH
+        function initAudio() {
+            if (!audioCtx) {
+                audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+                
+                const highpass = audioCtx.createBiquadFilter();
+                highpass.type = 'highpass';
+                highpass.frequency.value = 400;
 
-            const lowpass = audioCtx.createBiquadFilter();
-            lowpass.type = 'lowpass';
-            lowpass.frequency.value = 2800;
+                const lowpass = audioCtx.createBiquadFilter();
+                lowpass.type = 'lowpass';
+                lowpass.frequency.value = 2800;
 
-            source.connect(highpass);
-            highpass.connect(lowpass);
-            lowpass.connect(audioCtx.destination);
+                highpass.connect(lowpass);
+                lowpass.connect(audioCtx.destination);
+                radioFilterHead = highpass;
+            }
+            if (audioCtx.state === 'suspended') audioCtx.resume();
         }
 
-        // Inicjalizacja P2P
-        navigator.mediaDevices.getUserMedia({ audio: true }).then(stream => {
-            localStream = stream;
-            // Wyłączamy domyślnie mikrofon (wyciszenie PTT)
-            localStream.getAudioTracks()[0].enabled = false;
-
-            peer = new Peer();
-
-            peer.on('open', id => {
-                document.getElementById('myPeerId').textContent = id;
-            });
-
-            // Odbieranie połączenia od innego gracza
-            peer.on('call', call => {
-                call.answer(localStream);
-                call.on('stream', remoteStream => {
-                    createRadioFilter(remoteStream);
-                });
-                updateCount(1);
-            });
+        // Automatyczne łączenie z kanałem po wejściu
+        ably.connection.on('connected', () => {
+            document.getElementById('statusText').textContent = 'CONNECTED (122.800)';
+            
+            // Rejestracja w sieci (Presence) do zliczania pilotów online
+            channel.presence.enter();
+            updatePresenceCount();
         });
 
-        function connectToPeer() {
-            const targetId = document.getElementById('targetPeerId').value.trim();
-            if (!targetId || !peer) return;
+        channel.presence.subscribe(() => updatePresenceCount());
 
-            const call = peer.call(targetId, localStream);
-            call.on('stream', remoteStream => {
-                createRadioFilter(remoteStream);
+        function updatePresenceCount() {
+            channel.presence.get((err, members) => {
+                if (!err) {
+                    document.getElementById('pilotsCount').textContent = `${members.length} NA FREQ`;
+                }
             });
-            updateCount(1);
         }
 
-        function startTx() {
-            if (audioCtx.state === 'suspended') audioCtx.resume();
-            if (localStream) {
-                localStream.getAudioTracks()[0].enabled = true; // Włącz mikrofon (wysyła na żywo)
+        // Odbieranie głosu od INNYCH graczy
+        channel.subscribe('audio-stream', (msg) => {
+            // Ignorujemy własne pakiety (brak samodsłuchu)
+            if (msg.clientId === myClientId) return; 
+
+            initAudio();
+            const audioData = new Uint8Array(msg.data).buffer;
+            audioCtx.decodeAudioData(audioData, (buffer) => {
+                const source = audioCtx.createBufferSource();
+                source.buffer = buffer;
+                source.connect(radioFilterHead);
+                source.start(0);
+            }, () => {});
+        });
+
+        // Wysyłanie głosu do wszystkich na żywo
+        async function startTx() {
+            if (isTransmitting) return;
+            initAudio();
+
+            try {
+                mediaStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                isTransmitting = true;
                 document.getElementById('pttBtn').classList.add('active');
+
+                mediaRecorder = new MediaRecorder(mediaStream, { mimeType: 'audio/webm' });
+                mediaRecorder.ondataavailable = (e) => {
+                    if (e.data.size > 0 && isTransmitting) {
+                        e.data.arrayBuffer().then(arrayBuffer => {
+                            // Rozsyłanie strumienia do wszystkich
+                            channel.publish('audio-stream', Array.from(new Uint8Array(arrayBuffer)));
+                        });
+                    }
+                };
+                mediaRecorder.start(250); // Wysyłaj pakiety co 250ms
+            } catch (err) {
+                console.error("Mic Error:", err);
             }
         }
 
         function stopTx() {
-            if (localStream) {
-                localStream.getAudioTracks()[0].enabled = false; // Wycisz mikrofon
-                document.getElementById('pttBtn').classList.remove('active');
+            if (!isTransmitting) return;
+            isTransmitting = false;
+            document.getElementById('pttBtn').classList.remove('active');
+
+            if (mediaRecorder && mediaRecorder.state !== 'inactive') mediaRecorder.stop();
+            if (mediaStream) {
+                mediaStream.getTracks().forEach(t => t.stop());
+                mediaStream = null;
             }
         }
 
-        function updateCount(delta) {
-            connectedPeersCount += delta;
-            document.getElementById('pilotsCount').textContent = `${connectedPeersCount} NA CZĘSTOTLIWOŚCI`;
-        }
+        // Obsługa spacji
+        window.addEventListener('keydown', (e) => {
+            if (e.code === 'Space' && !e.repeat && document.activeElement.tagName !== 'INPUT') {
+                e.preventDefault(); startTx();
+            }
+        });
+        window.addEventListener('keyup', (e) => {
+            if (e.code === 'Space') { e.preventDefault(); stopTx(); }
+        });
     </script>
 </body>
 </html>
