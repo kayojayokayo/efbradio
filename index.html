@@ -3,206 +3,206 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>CometJet EFB Auto Live Radio</title>
-    <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;600;700;800;900&display=swap" rel="stylesheet">
-    <!-- Biblioteka do automatycznego łącznika globalnego -->
-    <script src="https://cdn.ably.com/lib/ably.min-1.js"></script>
+    <title>CometEFB - ATC & Charts</title>
     <style>
         :root {
-            --accent: #fbc02d;
-            --accent-dark: #f57f17;
-            --bg-main: #050505;
-            --bg-card: #111111;
-            --bg-card-alt: #141414;
-            --border: #222222;
-            --border-light: #333333;
-            --text: #ffffff;
-            --text-dim: #666666;
-            --danger: #e53935;
-            --success: #4caf50;
+            --bg-color: #0d0e12;
+            --panel-bg: #151821;
+            --panel-border: #242938;
+            --accent-color: #00d2ff;
+            --accent-hover: #00a3cc;
+            --text-main: #e1e6ed;
+            --text-muted: #8c93a4;
         }
 
-        * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Montserrat', sans-serif; user-select: none; }
-        body { background-color: var(--bg-main); color: var(--text); display: flex; justify-content: center; align-items: center; min-height: 100vh; padding: 20px; }
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: system-ui, sans-serif; }
+        body { background-color: var(--bg-color); color: var(--text-main); padding: 15px; }
 
-        .efb-radio-widget {
-            width: 320px;
-            background-color: var(--bg-card);
-            border: 1px solid var(--border);
-            border-radius: 12px;
-            padding: 16px;
-            display: flex; flex-direction: column; gap: 14px;
-            box-shadow: 0 12px 30px rgba(0,0,0,0.7);
-        }
+        .efb-container { display: flex; flex-direction: column; gap: 15px; max-width: 1200px; margin: 0 auto; }
+        .panel { background-color: var(--panel-bg); border: 1px solid var(--panel-border); border-radius: 8px; padding: 15px; }
+        .panel-header { font-size: 13px; font-weight: 700; color: var(--accent-color); text-transform: uppercase; margin-bottom: 12px; }
 
-        .radio-header { display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border); padding-bottom: 10px; }
-        .radio-title { font-size: 12px; font-weight: 800; letter-spacing: 1.5px; text-transform: uppercase; }
+        .sb-fetch-group { display: flex; gap: 10px; }
+        input[type="text"] { flex: 1; background: #0d0e12; border: 1px solid var(--panel-border); color: #fff; padding: 8px 12px; border-radius: 6px; font-size: 13px; outline: none; }
+        input[type="text"]:focus { border-color: var(--accent-color); }
+        .btn { background-color: var(--accent-color); color: #000; font-weight: 600; border: none; padding: 8px 14px; border-radius: 6px; cursor: pointer; font-size: 12px; }
 
-        .pilots-online-pill {
-            background-color: var(--bg-card-alt); border: 1px solid var(--border-light);
-            border-radius: 20px; padding: 3px 10px; font-size: 10px; font-weight: 800; color: var(--accent);
-            display: flex; align-items: center; gap: 6px;
-        }
-        .status-dot { width: 6px; height: 6px; background-color: var(--success); border-radius: 50%; box-shadow: 0 0 6px var(--success); }
+        .atc-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 10px; }
+        .atc-section { background: rgba(0,0,0,0.2); border: 1px solid var(--panel-border); padding: 10px; border-radius: 6px; }
+        .atc-section-title { font-size: 11px; color: var(--text-muted); text-transform: uppercase; margin-bottom: 8px; }
+        
+        .atc-chip { background: #1c2230; border-left: 3px solid var(--accent-color); padding: 6px 10px; margin-bottom: 5px; border-radius: 3px; font-size: 12px; display: flex; justify-content: space-between; }
+        .atc-chip .freq { color: var(--accent-color); font-weight: bold; }
 
-        .freq-card {
-            background: var(--bg-card-alt); border: 1px solid var(--border-light); border-radius: 8px; padding: 12px 16px;
-            display: flex; justify-content: space-between; align-items: center;
-        }
-        .freq-info { display: flex; flex-direction: column; }
-        .freq-label { font-size: 9px; font-weight: 700; color: var(--text-dim); }
-        .freq-status { font-size: 11px; font-weight: 800; color: var(--success); margin-top: 2px; }
-
-        .ptt-button {
-            width: 100%; height: 52px; background: linear-gradient(180deg, var(--bg-card-alt) 0%, #08080a 100%);
-            border: 2px solid var(--accent); border-radius: 8px; color: var(--accent);
-            font-size: 13px; font-weight: 900; letter-spacing: 2px; cursor: pointer;
-            display: flex; align-items: center; justify-content: center; transition: all 0.1s;
-        }
-        .ptt-button:active, .ptt-button.active { background: linear-gradient(180deg, var(--accent) 0%, var(--accent-dark) 100%); color: #000; }
-        .ptt-hint { font-size: 9px; font-weight: 700; color: var(--text-dim); text-align: center; text-transform: uppercase; }
+        .chart-controls { display: flex; gap: 10px; margin-bottom: 10px; }
+        .chart-frame-container { width: 100%; height: 650px; border: 1px solid var(--panel-border); border-radius: 6px; overflow: hidden; background: #151821; }
+        iframe { width: 100%; height: 100%; border: none; }
     </style>
 </head>
 <body>
 
-    <div class="efb-radio-widget">
-        <div class="radio-header">
-            <span class="radio-title">📻 RADIO COMM</span>
-            <div class="pilots-online-pill">
-                <span class="status-dot"></span>
-                <span id="pilotsCount">... NA FREQ</span>
-            </div>
-        </div>
+<div class="efb-container">
 
-        <div class="freq-card">
-            <div class="freq-info">
-                <span class="freq-label">CHANNEL STATUS</span>
-                <span class="freq-status" id="statusText">CONNECTING...</span>
-            </div>
-        </div>
-
-        <div class="ptt-container">
-            <button class="ptt-button" id="pttBtn" onmousedown="startTx()" onmouseup="stopTx()" ontouchstart="startTx()" ontouchend="stopTx()">
-                PUSH TO TALK
-            </button>
-            <span class="ptt-hint" style="margin-top: 8px; display: block;">HOLD SPACEBAR OR TAP TO TRANSMIT</span>
+    <div class="panel">
+        <div class="sb-fetch-group">
+            <input type="text" id="sb-userid" placeholder="Numer ID SimBrief (np. 123456)">
+            <button class="btn" onclick="fetchData()">Pobierz dane lotu</button>
         </div>
     </div>
 
-    <script>
-        // Darmowy klucz publiczny transmisji radiowej
-        const ABLY_KEY = 'xVne1A.A4Bq2g:f4qf0RkW_MAnV8v1XvK8kU0y4S9gT3S2'; 
-        const myClientId = 'pilot_' + Math.random().toString(36).substr(2, 9);
-        
-        let ably = new Ably.Realtime({ key: ABLY_KEY, clientId: myClientId });
-        let channel = ably.channels.get('cometjet-global-freq');
+    <!-- SEKCJA ATC VATSIM -->
+    <div class="panel">
+        <div class="panel-header">Aktywne ATC VATSIM na Trasie</div>
+        <div class="atc-grid">
+            <div class="atc-section">
+                <div class="atc-section-title" id="title-dep">Odlot (DEP)</div>
+                <div id="atc-dep-list" class="status-text">-</div>
+            </div>
+            <div class="atc-section">
+                <div class="atc-section-title">Trasa (ENROUTE CTR)</div>
+                <div id="atc-enroute-list" class="status-text">-</div>
+            </div>
+            <div class="atc-section">
+                <div class="atc-section-title" id="title-arr">Przylot (ARR)</div>
+                <div id="atc-arr-list" class="status-text">-</div>
+            </div>
+        </div>
+    </div>
 
-        let audioCtx = null;
-        let mediaStream = null;
-        let mediaRecorder = null;
-        let radioFilterHead = null;
-        let isTransmitting = false;
+    <!-- SEKCJA KART -->
+    <div class="panel">
+        <div class="panel-header">Karty Lotnicze (Podgląd)</div>
+        <div class="chart-controls">
+            <button class="btn" onclick="loadChart('dep')">Karty Odlotu</button>
+            <button class="btn" onclick="loadChart('arr')">Karty Przylotu</button>
+        </div>
+        <div class="chart-frame-container">
+            <iframe id="chart-viewer" src="about:blank"></iframe>
+        </div>
+    </div>
 
-        // Inicjalizacja filtru VHF dla głosu INNYCH
-        function initAudio() {
-            if (!audioCtx) {
-                audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-                
-                const highpass = audioCtx.createBiquadFilter();
-                highpass.type = 'highpass';
-                highpass.frequency.value = 400;
+</div>
 
-                const lowpass = audioCtx.createBiquadFilter();
-                lowpass.type = 'lowpass';
-                lowpass.frequency.value = 2800;
+<script>
+    let flightData = { dep: '', arr: '', route: '', firList: [] };
 
-                highpass.connect(lowpass);
-                lowpass.connect(audioCtx.destination);
-                radioFilterHead = highpass;
-            }
-            if (audioCtx.state === 'suspended') audioCtx.resume();
+    window.addEventListener('DOMContentLoaded', () => {
+        const savedId = localStorage.getItem('simbrief_userid');
+        if (savedId) {
+            document.getElementById('sb-userid').value = savedId;
+            fetchData();
         }
+    });
 
-        // Automatyczne łączenie z kanałem po wejściu
-        ably.connection.on('connected', () => {
-            document.getElementById('statusText').textContent = 'CONNECTED (122.800)';
-            
-            // Rejestracja w sieci (Presence) do zliczania pilotów online
-            channel.presence.enter();
-            updatePresenceCount();
-        });
+    function fetchData() {
+        const userId = document.getElementById('sb-userid').value.trim();
+        if (!userId) return;
 
-        channel.presence.subscribe(() => updatePresenceCount());
+        localStorage.setItem('simbrief_userid', userId);
 
-        function updatePresenceCount() {
-            channel.presence.get((err, members) => {
-                if (!err) {
-                    document.getElementById('pilotsCount').textContent = `${members.length} NA FREQ`;
+        fetch(`https://www.simbrief.com/api/xml.fetcher.php?userid=${userId}&json=v2`)
+            .then(res => res.json())
+            .then(data => {
+                if (data.fetch && data.fetch.status === 'error') return;
+
+                flightData.dep = data.origin?.icao_code || '';
+                flightData.arr = data.destination?.icao_code || '';
+                flightData.route = data.general?.route || '';
+
+                extractFIRsFromRoute(data);
+
+                document.getElementById('title-dep').innerText = `Odlot (${flightData.dep})`;
+                document.getElementById('title-arr').innerText = `Przylot (${flightData.arr})`;
+
+                loadChart('dep');
+                fetchVatsimATC();
+            })
+            .catch(err => console.error(err));
+    }
+
+    function extractFIRsFromRoute(data) {
+        const firs = new Set();
+        if (flightData.dep) firs.add(flightData.dep.substring(0, 2));
+        if (flightData.arr) firs.add(flightData.arr.substring(0, 2));
+
+        if (data.navlog && data.navlog.fix) {
+            data.navlog.fix.forEach(fix => {
+                if (fix.fir_icao) {
+                    firs.add(fix.fir_icao.substring(0, 2));
+                    firs.add(fix.fir_icao);
                 }
             });
         }
+        flightData.firList = Array.from(firs);
+    }
 
-        // Odbieranie głosu od INNYCH graczy
-        channel.subscribe('audio-stream', (msg) => {
-            // Ignorujemy własne pakiety (brak samodsłuchu)
-            if (msg.clientId === myClientId) return; 
+    function loadChart(type) {
+        const icao = type === 'dep' ? flightData.dep : flightData.arr;
+        const viewer = document.getElementById('chart-viewer');
 
-            initAudio();
-            const audioData = new Uint8Array(msg.data).buffer;
-            audioCtx.decodeAudioData(audioData, (buffer) => {
-                const source = audioCtx.createBufferSource();
-                source.buffer = buffer;
-                source.connect(radioFilterHead);
-                source.start(0);
-            }, () => {});
-        });
+        if (!icao) return;
 
-        // Wysyłanie głosu do wszystkich na żywo
-        async function startTx() {
-            if (isTransmitting) return;
-            initAudio();
+        // Wykorzystanie otwartego portalu kart bez blokady X-Frame-Options
+        viewer.src = `https://metar-taf.com/charts/${icao}`;
+    }
 
-            try {
-                mediaStream = await navigator.mediaDevices.getUserMedia({ audio: true });
-                isTransmitting = true;
-                document.getElementById('pttBtn').classList.add('active');
+    async function fetchVatsimATC() {
+        if (!flightData.dep || !flightData.arr) return;
 
-                mediaRecorder = new MediaRecorder(mediaStream, { mimeType: 'audio/webm' });
-                mediaRecorder.ondataavailable = (e) => {
-                    if (e.data.size > 0 && isTransmitting) {
-                        e.data.arrayBuffer().then(arrayBuffer => {
-                            // Rozsyłanie strumienia do wszystkich
-                            channel.publish('audio-stream', Array.from(new Uint8Array(arrayBuffer)));
-                        });
+        try {
+            const res = await fetch('https://data.vatsim.net/v3/vatsim-data.json');
+            const data = await res.json();
+
+            const dep = flightData.dep;
+            const arr = flightData.arr;
+
+            const depATC = [];
+            const arrATC = [];
+            const enrouteATC = [];
+
+            data.controllers.forEach(c => {
+                if (!c.callsign || c.callsign.endsWith('_ATIS')) return;
+
+                if (c.callsign.startsWith(dep)) {
+                    depATC.push(c);
+                } 
+                else if (c.callsign.startsWith(arr)) {
+                    arrATC.push(c);
+                } 
+                else if (c.callsign.endsWith('_CTR') || c.callsign.endsWith('_FSS')) {
+                    const callsignPrefix = c.callsign.substring(0, 2);
+                    const callsignFir = c.callsign.split('_')[0];
+                    
+                    if (flightData.firList.includes(callsignPrefix) || flightData.firList.includes(callsignFir)) {
+                        enrouteATC.push(c);
                     }
-                };
-                mediaRecorder.start(250); // Wysyłaj pakiety co 250ms
-            } catch (err) {
-                console.error("Mic Error:", err);
-            }
+                }
+            });
+
+            renderGroup('atc-dep-list', depATC);
+            renderGroup('atc-arr-list', arrATC);
+            renderGroup('atc-enroute-list', enrouteATC);
+
+        } catch (err) {
+            console.error('Błąd VATSIM ATC:', err);
+        }
+    }
+
+    function renderGroup(elementId, controllers) {
+        const container = document.getElementById(elementId);
+        if (!controllers.length) {
+            container.innerHTML = '<span style="font-size:12px; color:#8c93a4;">Brak aktywnej pozycji</span>';
+            return;
         }
 
-        function stopTx() {
-            if (!isTransmitting) return;
-            isTransmitting = false;
-            document.getElementById('pttBtn').classList.remove('active');
+        container.innerHTML = controllers.map(c => `
+            <div class="atc-chip">
+                <span>${c.callsign}</span>
+                <span class="freq">${c.frequency}</span>
+            </div>
+        `).join('');
+    }
+</script>
 
-            if (mediaRecorder && mediaRecorder.state !== 'inactive') mediaRecorder.stop();
-            if (mediaStream) {
-                mediaStream.getTracks().forEach(t => t.stop());
-                mediaStream = null;
-            }
-        }
-
-        // Obsługa spacji
-        window.addEventListener('keydown', (e) => {
-            if (e.code === 'Space' && !e.repeat && document.activeElement.tagName !== 'INPUT') {
-                e.preventDefault(); startTx();
-            }
-        });
-        window.addEventListener('keyup', (e) => {
-            if (e.code === 'Space') { e.preventDefault(); stopTx(); }
-        });
-    </script>
 </body>
 </html>
