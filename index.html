@@ -3,17 +3,13 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>CometJet EFB Radio Widget</title>
+    <title>CometJet EFB Live Radio Widget</title>
     <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;600;700;800;900&display=swap" rel="stylesheet">
     <style>
         :root {
             --accent: #fbc02d;
             --accent-dark: #f57f17;
             --bg-main: #050505;
-            --bg-device: #0a0a0c;
-            --bg-status: #08080a;
-            --bg-sidebar: #0d0d12;
-            --bg-content: #0d0d0d;
             --bg-card: #111111;
             --bg-card-alt: #141414;
             --border: #222222;
@@ -21,7 +17,6 @@
             --text: #ffffff;
             --text-muted: #888888;
             --text-dim: #666666;
-            --font-scale: 1;
             --danger: #e53935;
             --success: #4caf50;
         }
@@ -45,7 +40,6 @@
             padding: 20px;
         }
 
-        /* COMPACT EFB RADIO WIDGET STYLING */
         .efb-radio-widget {
             width: 320px;
             background-color: var(--bg-card);
@@ -56,8 +50,6 @@
             display: flex;
             flex-direction: column;
             gap: 14px;
-            position: relative;
-            overflow: hidden;
         }
 
         .radio-header {
@@ -84,7 +76,6 @@
             font-weight: 800;
             letter-spacing: 1.5px;
             text-transform: uppercase;
-            color: var(--text);
         }
 
         .pilots-online-pill {
@@ -95,7 +86,6 @@
             font-size: 10px;
             font-weight: 800;
             color: var(--accent);
-            letter-spacing: 0.5px;
             display: flex;
             align-items: center;
             gap: 6px;
@@ -109,7 +99,6 @@
             box-shadow: 0 0 6px var(--success);
         }
 
-        /* DISPLAY PANEL */
         .freq-display-card {
             background-color: var(--bg-card-alt);
             border: 1px solid var(--border-light);
@@ -118,7 +107,6 @@
             display: flex;
             justify-content: space-between;
             align-items: center;
-            position: relative;
         }
 
         .freq-info {
@@ -131,14 +119,12 @@
             font-weight: 700;
             color: var(--text-dim);
             text-transform: uppercase;
-            letter-spacing: 1px;
         }
 
         .freq-status {
             font-size: 11px;
             font-weight: 800;
             color: var(--success);
-            letter-spacing: 1px;
             text-transform: uppercase;
             margin-top: 2px;
         }
@@ -156,14 +142,7 @@
             font-size: 10px;
             font-weight: 800;
             text-transform: uppercase;
-            letter-spacing: 1px;
             cursor: pointer;
-            transition: all 0.2s ease;
-        }
-
-        .disconnect-btn:hover {
-            background-color: var(--danger);
-            color: #ffffff;
         }
 
         .disconnect-btn.connect-state {
@@ -172,18 +151,11 @@
             color: var(--success);
         }
 
-        .disconnect-btn.connect-state:hover {
-            background-color: var(--success);
-            color: #000000;
-        }
-
-        /* PUSH TO TALK BUTTON DESIGN */
         .ptt-container {
             display: flex;
             flex-direction: column;
             align-items: center;
             gap: 8px;
-            margin-top: 4px;
         }
 
         .ptt-button {
@@ -202,22 +174,11 @@
             align-items: center;
             justify-content: center;
             gap: 10px;
-            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
-            transition: all 0.12s ease;
-            position: relative;
-            overflow: hidden;
-        }
-
-        .ptt-button:hover:not(:disabled) {
-            border-color: var(--accent);
-            box-shadow: 0 0 15px color-mix(in srgb, var(--accent) 40%, transparent);
         }
 
         .ptt-button:active:not(:disabled), .ptt-button.active {
             background: linear-gradient(180deg, var(--accent) 0%, var(--accent-dark) 100%);
             color: #000000;
-            box-shadow: 0 0 22px color-mix(in srgb, var(--accent) 80%, transparent);
-            transform: scale(0.98);
         }
 
         .ptt-button:disabled {
@@ -225,7 +186,6 @@
             border-color: var(--border-light);
             color: var(--text-muted);
             cursor: not-allowed;
-            box-shadow: none;
         }
 
         .ptt-hint {
@@ -233,10 +193,8 @@
             font-weight: 700;
             color: var(--text-dim);
             text-transform: uppercase;
-            letter-spacing: 0.8px;
         }
 
-        /* AUDIO INDICATOR WAVE */
         .tx-indicator {
             display: flex;
             align-items: center;
@@ -264,7 +222,6 @@
 </head>
 <body>
 
-    <!-- EFB RADIO WIDGET -->
     <div class="efb-radio-widget">
         <div class="radio-header">
             <div class="radio-title-group">
@@ -280,13 +237,13 @@
         <div class="freq-display-card">
             <div class="freq-info">
                 <span class="freq-label">CHANNEL STATUS</span>
-                <span class="freq-status" id="channelStatus">CONNECTED</span>
+                <span class="freq-status" id="channelStatus">CONNECTING...</span>
             </div>
             <button class="disconnect-btn" id="toggleConnectBtn" onclick="toggleConnection()">DISCONNECT</button>
         </div>
 
         <div class="ptt-container">
-            <button class="ptt-button" id="pttBtn">
+            <button class="ptt-button" id="pttBtn" disabled>
                 <div class="tx-indicator" style="display: none;" id="txAnim">
                     <div class="tx-bar"></div>
                     <div class="tx-bar"></div>
@@ -299,74 +256,101 @@
     </div>
 
     <script>
-        // State variables
-        let isConnected = true;
+        // WebSocket & Audio State
+        const SERVER_URL = "ws://localhost:8080"; // Zmień na swój adres IP / domeny serwera
+        let ws = null;
+        let isConnected = false;
         let isTransmitting = false;
-        let activePilots = 12; // Example count of online pilots
 
-        // Web Audio API setup for Walkie-Talkie / Radio Filter effect
         let audioCtx = null;
         let mediaStream = null;
-        let sourceNode = null;
-        let staticNoiseNode = null;
-        let staticGain = null;
+        let mediaRecorder = null;
 
-        // Bandpass filter & distortion nodes for VHF Radio Sound
-        let highpassFilter = null;
-        let lowpassFilter = null;
-        let waveshaperNode = null;
+        // Audio Filter Nodes for incoming voices
+        let radioFilterHead = null;
 
         function initAudioContext() {
             if (!audioCtx) {
                 const AudioContext = window.AudioContext || window.webkitAudioContext;
                 audioCtx = new AudioContext();
+
+                // Build Radio Audio Pipeline for Incoming Voice (VHF Filter + Distortion)
+                const highpass = audioCtx.createBiquadFilter();
+                highpass.type = 'highpass';
+                highpass.frequency.value = 400;
+
+                const lowpass = audioCtx.createBiquadFilter();
+                lowpass.type = 'lowpass';
+                lowpass.frequency.value = 2800;
+
+                const distortion = audioCtx.createWaveShaper();
+                distortion.curve = makeDistortionCurve(15);
+
+                highpass.connect(lowpass);
+                lowpass.connect(distortion);
+                distortion.connect(audioCtx.destination);
+
+                radioFilterHead = highpass;
             }
             if (audioCtx.state === 'suspended') {
                 audioCtx.resume();
             }
         }
 
-        // Generate procedural static noise (radio hum/crackle)
-        function createStaticNoiseNode() {
-            const bufferSize = audioCtx.sampleRate * 2; // 2 seconds buffer
-            const noiseBuffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate);
-            const output = noiseBuffer.getChannelData(0);
-            for (let i = 0; i < bufferSize; i++) {
-                output[i] = Math.random() * 2 - 1;
-            }
-
-            const whiteNoise = audioCtx.createBufferSource();
-            whiteNoise.buffer = noiseBuffer;
-            whiteNoise.loop = true;
-
-            // Bandpass the noise to sound like radio static background
-            const noiseFilter = audioCtx.createBiquadFilter();
-            noiseFilter.type = 'bandpass';
-            noiseFilter.frequency.value = 1200;
-            noiseFilter.Q.value = 1.5;
-
-            staticGain = audioCtx.createGain();
-            staticGain.gain.value = 0.015; // Low background static hum
-
-            whiteNoise.connect(noiseFilter);
-            noiseFilter.connect(staticGain);
-            staticGain.connect(audioCtx.destination);
-
-            whiteNoise.start();
-            return whiteNoise;
-        }
-
-        // Distortion curve for radio overdrive effect
-        function makeDistortionCurve(amount = 20) {
-            const k = amount;
-            const n_samples = 44100;
-            const curve = new Float32Array(n_samples);
-            const deg = Math.PI / 180;
-            for (let i = 0; i < n_samples; ++i) {
-                const x = (i * 2) / n_samples - 1;
+        function makeDistortionCurve(amount = 15) {
+            const k = amount, n = 44100, curve = new Float32Array(n), deg = Math.PI / 180;
+            for (let i = 0; i < n; ++i) {
+                const x = (i * 2) / n - 1;
                 curve[i] = ((3 + k) * x * 20 * deg) / (Math.PI + k * Math.abs(x));
             }
             return curve;
+        }
+
+        function connectWebSocket() {
+            ws = new WebSocket(SERVER_URL);
+            ws.binaryType = 'arraybuffer';
+
+            ws.onopen = () => {
+                isConnected = true;
+                updateStatusUI(true);
+            };
+
+            ws.onmessage = (event) => {
+                if (typeof event.data === 'string') {
+                    const data = JSON.parse(event.data);
+                    if (data.type === 'COUNT_UPDATE') {
+                        document.getElementById('pilotsCount').textContent = `${data.count} ONLINE`;
+                    }
+                } else if (event.data instanceof ArrayBuffer) {
+                    // Play incoming audio stream from other pilots
+                    playIncomingAudio(event.data);
+                }
+            };
+
+            ws.onclose = () => {
+                isConnected = false;
+                updateStatusUI(false);
+            };
+
+            ws.onerror = (err) => {
+                console.error("WS Error:", err);
+                isConnected = false;
+                updateStatusUI(false);
+            };
+        }
+
+        async function playIncomingAudio(arrayBuffer) {
+            initAudioContext();
+            try {
+                const audioBuffer = await audioCtx.decodeAudioData(arrayBuffer);
+                const source = audioCtx.createBufferSource();
+                source.buffer = audioBuffer;
+                // Przepuszczamy głos INNYCH przez filtr radiowy do głośników
+                source.connect(radioFilterHead);
+                source.start();
+            } catch (e) {
+                // Fragment audio w trakcie dekodowania
+            }
         }
 
         async function startTransmission() {
@@ -374,54 +358,25 @@
             initAudioContext();
 
             try {
-                // IMPORTANT: Request microphone WITHOUT speech processing triggers that trigger call-mode UI/hardware routing
                 mediaStream = await navigator.mediaDevices.getUserMedia({
-                    audio: {
-                        echoCancellation: false,
-                        noiseSuppression: false,
-                        autoGainControl: false,
-                        channelCount: 1
-                    },
+                    audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false },
                     video: false
                 });
 
-                // Set flags and UI
                 isTransmitting = true;
                 updatePTTUI(true);
 
-                // Create Walkie-Talkie / VHF Filter Chain
-                sourceNode = audioCtx.createMediaStreamSource(mediaStream);
-
-                // VHF Bandpass limits: Cut off below 400Hz and above 3000Hz for iconic radio metallic sound
-                highpassFilter = audioCtx.createBiquadFilter();
-                highpassFilter.type = 'highpass';
-                highpassFilter.frequency.value = 400;
-
-                lowpassFilter = audioCtx.createBiquadFilter();
-                lowpassFilter.type = 'lowpass';
-                lowpassFilter.frequency.value = 2800;
-
-                // Waveshaper for subtle radio audio saturation/clipping
-                waveshaperNode = audioCtx.createWaveShaper();
-                waveshaperNode.curve = makeDistortionCurve(15);
-
-                // Connect audio pipeline
-                sourceNode.connect(highpassFilter);
-                highpassFilter.connect(lowpassFilter);
-                lowpassFilter.connect(waveshaperNode);
-
-                // Connect output to standard speaker destination (Non-telephony playback)
-                waveshaperNode.connect(audioCtx.destination);
-
-                // Start static background crackle while transmitting
-                if (!staticNoiseNode) {
-                    staticNoiseNode = createStaticNoiseNode();
-                } else if (staticGain) {
-                    staticGain.gain.setValueAtTime(0.02, audioCtx.currentTime);
-                }
+                // Streamowanie głosu do WebSocket w małych paczkach (brak odsłuchu samego siebie)
+                mediaRecorder = new MediaRecorder(mediaStream, { mimeType: 'audio/webm;codecs=opus' });
+                mediaRecorder.ondataavailable = (e) => {
+                    if (e.data.size > 0 && ws && ws.readyState === WebSocket.OPEN) {
+                        e.data.arrayBuffer().then(buffer => ws.send(buffer));
+                    }
+                };
+                mediaRecorder.start(100); // Wysyłaj pakiet co 100ms
 
             } catch (err) {
-                console.error("Microphone access denied or error:", err);
+                console.error("Mic error:", err);
                 stopTransmission();
             }
         }
@@ -431,13 +386,41 @@
             isTransmitting = false;
             updatePTTUI(false);
 
+            if (mediaRecorder && mediaRecorder.state !== 'inactive') {
+                mediaRecorder.stop();
+            }
             if (mediaStream) {
-                mediaStream.getTracks().forEach(track => track.stop());
+                mediaStream.getTracks().forEach(t => t.stop());
                 mediaStream = null;
             }
+        }
 
-            if (staticGain && audioCtx) {
-                staticGain.gain.setValueAtTime(0, audioCtx.currentTime);
+        function updateStatusUI(connected) {
+            const statusEl = document.getElementById('channelStatus');
+            const btnEl = document.getElementById('toggleConnectBtn');
+            const pttBtn = document.getElementById('pttBtn');
+
+            if (connected) {
+                statusEl.textContent = 'CONNECTED';
+                statusEl.classList.remove('disconnected');
+                btnEl.textContent = 'DISCONNECT';
+                btnEl.classList.remove('connect-state');
+                pttBtn.disabled = false;
+            } else {
+                statusEl.textContent = 'DISCONNECTED';
+                statusEl.classList.add('disconnected');
+                btnEl.textContent = 'CONNECT';
+                btnEl.classList.add('connect-state');
+                pttBtn.disabled = true;
+                document.getElementById('pilotsCount').textContent = `0 ONLINE`;
+            }
+        }
+
+        function toggleConnection() {
+            if (isConnected) {
+                if (ws) ws.close();
+            } else {
+                connectWebSocket();
             }
         }
 
@@ -457,67 +440,27 @@
             }
         }
 
-        function toggleConnection() {
-            isConnected = !isConnected;
-            const statusEl = document.getElementById('channelStatus');
-            const btnEl = document.getElementById('toggleConnectBtn');
-            const pttBtn = document.getElementById('pttBtn');
-
-            if (isConnected) {
-                statusEl.textContent = 'CONNECTED';
-                statusEl.classList.remove('disconnected');
-                btnEl.textContent = 'DISCONNECT';
-                btnEl.classList.remove('connect-state');
-                pttBtn.disabled = false;
-            } else {
-                if (isTransmitting) stopTransmission();
-                statusEl.textContent = 'DISCONNECTED';
-                statusEl.classList.add('disconnected');
-                btnEl.textContent = 'CONNECT';
-                btnEl.classList.add('connect-state');
-                pttBtn.disabled = true;
-            }
-        }
-
-        // Initialize pilot count display
-        document.getElementById('pilotsCount').textContent = `${activePilots} ONLINE`;
-
-        // Event listeners for PTT button
         const pttBtn = document.getElementById('pttBtn');
+        pttBtn.addEventListener('mousedown', (e) => { e.preventDefault(); startTransmission(); });
+        window.addEventListener('mouseup', () => { if (isTransmitting) stopTransmission(); });
+        pttBtn.addEventListener('touchstart', (e) => { e.preventDefault(); startTransmission(); });
+        pttBtn.addEventListener('touchend', (e) => { e.preventDefault(); stopTransmission(); });
 
-        pttBtn.addEventListener('mousedown', (e) => {
-            e.preventDefault();
-            startTransmission();
-        });
-
-        window.addEventListener('mouseup', () => {
-            if (isTransmitting) stopTransmission();
-        });
-
-        pttBtn.addEventListener('touchstart', (e) => {
-            e.preventDefault();
-            startTransmission();
-        });
-
-        pttBtn.addEventListener('touchend', (e) => {
-            e.preventDefault();
-            stopTransmission();
-        });
-
-        // Spacebar PTT control
         window.addEventListener('keydown', (e) => {
             if (e.code === 'Space' && !e.repeat && document.activeElement.tagName !== 'INPUT') {
                 e.preventDefault();
                 startTransmission();
             }
         });
-
         window.addEventListener('keyup', (e) => {
             if (e.code === 'Space') {
                 e.preventDefault();
                 stopTransmission();
             }
         });
+
+        // Auto-connect on startup
+        connectWebSocket();
     </script>
 </body>
 </html>
