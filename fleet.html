@@ -1,0 +1,391 @@
+<div class="download-center-widget">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;600;700;800;900&display=swap" rel="stylesheet">
+
+    <style>
+        html, body {
+            overflow-y: auto !important;
+            scrollbar-width: none;
+            -ms-overflow-style: none;
+        }
+
+        html::-webkit-scrollbar,
+        body::-webkit-scrollbar {
+            display: none !important;
+            width: 0 !important;
+            height: 0 !important;
+        }
+
+        .download-center-widget {
+            font-family: 'Montserrat', sans-serif;
+            box-sizing: border-box;
+            width: 100%;
+            margin: 0;
+            padding: 0 4px 12px 0;
+            color: #111111;
+            overflow-y: auto;
+            max-height: 100vh;
+            scrollbar-width: none;
+            -ms-overflow-style: none;
+        }
+
+        .download-center-widget::-webkit-scrollbar {
+            display: none !important;
+            width: 0 !important;
+            height: 0 !important;
+        }
+
+        .download-center-widget * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: 'Montserrat', sans-serif;
+            border-radius: 0 !important;
+        }
+
+        .dc-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 12px;
+            margin-bottom: 16px;
+            padding-bottom: 6px;
+            border-bottom: 2px solid #111111;
+        }
+
+        .dc-title {
+            font-size: 13px;
+            font-weight: 900;
+            letter-spacing: 2px;
+            text-transform: uppercase;
+            color: #888888;
+            margin: 0;
+        }
+
+        /* Sekcja filtrów */
+        .dc-filters {
+            display: flex;
+            gap: 6px;
+            flex-wrap: wrap;
+        }
+
+        .dc-filter-btn {
+            background-color: #f0f0ec;
+            border: none;
+            color: #111111;
+            padding: 6px 12px;
+            font-size: 9px;
+            font-weight: 800;
+            letter-spacing: 1px;
+            text-transform: uppercase;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .dc-filter-btn:hover,
+        .dc-filter-btn.active {
+            background-color: #fbc02d;
+            color: #000000;
+        }
+
+        .dc-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 16px;
+            width: 100%;
+        }
+
+        @media (max-width: 1024px) {
+            .dc-grid {
+                grid-template-columns: repeat(2, 1fr);
+            }
+        }
+
+        @media (max-width: 600px) {
+            .dc-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        .dc-card {
+            background-color: #ffffff;
+            border: 1px solid #e2e2dc;
+            overflow: hidden;
+            transition: all 0.2s ease;
+            display: flex;
+            flex-direction: column;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.02);
+        }
+
+        .dc-card:hover {
+            border-color: #fbc02d;
+            box-shadow: 0 6px 16px rgba(0,0,0,0.06);
+        }
+
+        .dc-card-hero {
+            position: relative;
+            height: 160px;
+            background-color: #eee;
+            overflow: hidden;
+        }
+
+        .dc-card-image {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            display: block;
+        }
+
+        .dc-card-badge {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            background-color: #111111;
+            color: #ffffff;
+            font-weight: 800;
+            font-size: 9px;
+            padding: 4px 8px;
+            letter-spacing: 0.8px;
+            text-transform: uppercase;
+            z-index: 2;
+        }
+
+        /* Nawigacja slidera (strzałki) */
+        .dc-slider-btn {
+            position: absolute;
+            top: 50%;
+            transform: translateY(-50%);
+            background-color: rgba(17, 17, 17, 0.7);
+            color: #ffffff;
+            border: none;
+            width: 28px;
+            height: 36px;
+            font-size: 16px;
+            font-weight: 900;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: background-color 0.2s ease;
+            z-index: 2;
+        }
+
+        .dc-slider-btn:hover {
+            background-color: #fbc02d;
+            color: #000000;
+        }
+
+        .dc-slider-btn.prev { left: 0; }
+        .dc-slider-btn.next { right: 0; }
+
+        .dc-card-body {
+            padding: 16px;
+            display: flex;
+            flex-direction: column;
+            flex-grow: 1;
+        }
+
+        .dc-card-title {
+            font-size: 15px;
+            font-weight: 900;
+            text-transform: uppercase;
+            letter-spacing: 0.8px;
+            color: #111111;
+            margin-bottom: 2px;
+        }
+
+        .dc-card-subtitle {
+            font-size: 9px;
+            font-weight: 700;
+            color: #888888;
+            text-transform: uppercase;
+            letter-spacing: 1.2px;
+            margin-bottom: 14px;
+        }
+
+        .dc-card-actions {
+            margin-top: auto;
+            padding-top: 12px;
+            border-top: 1px solid #f0f0ec;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .dc-download-btn {
+            display: block;
+            width: 100%;
+            padding: 10px 0;
+            background-color: #fbc02d;
+            color: #000000;
+            font-size: 10px;
+            font-weight: 900;
+            text-align: center;
+            text-decoration: none;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            transition: background-color 0.2s ease;
+            border: none;
+            cursor: pointer;
+        }
+
+        .dc-download-btn:hover {
+            background-color: #e0a800;
+        }
+    </style>
+
+    <div class="dc-header">
+        <div class="dc-title">Download Center — Official Liveries</div>
+        <div class="dc-filters" id="dcFilters"></div>
+    </div>
+
+    <div class="dc-grid" id="dcGrid"></div>
+
+    <script>
+        (function() {
+            // Powrót do standardowego linku podglądu, otwieranego bezpiecznie przez JS window.open
+            const aircraftData = [
+                {
+                    aircraftName: 'Airbus A220-300',
+                    currentIndex: 0,
+                    variants: [
+                        { liveryTitle: 'Standard Livery', sim: 'MSFS2024', addon: 'Synaptic', img: 'https://iili.io/CLTmYIn.md.png', downloadUrl: 'https://drive.google.com/file/d/1q6zlop8jJR00JrVfeNAm2OPOTgsFbCBc/view?usp=sharing' },
+                    ]
+                },
+                {
+                    aircraftName: 'Airbus A320ceo',
+                    currentIndex: 0,
+                    variants: [
+                        { liveryTitle: 'Standard Livery 2024', sim: 'MSFS2024', addon: 'Fenix A320', img: 'https://iili.io/CLuH0w7.md.png', downloadUrl: 'https://drive.google.com/file/d/1JIbj2DbYU_8Iu1IVpsi4F66bIjyz6laK/view?usp=sharing' },
+                    ]
+                },
+                {
+                    aircraftName: 'Airbus A320neo',
+                    currentIndex: 0,
+                    variants: [
+                        { liveryTitle: 'Standard Livery', sim: 'MSFS2024', addon: 'IniBuilds a320neo', img: 'https://iili.io/CLu2MMX.md.png', downloadUrl: '#' },
+                    ]
+                },
+                {
+                    aircraftName: 'Airbus A321ceo',
+                    currentIndex: 0,
+                    variants: [
+                        { liveryTitle: 'Standard Livery', sim: 'MSFS2024', addon: 'Fenix A321', img: 'https://iili.io/CLy6GDb.png', downloadUrl: 'https://drive.google.com/file/d/1WgVkYwah8NjyKS_JwJuZhQRJixneFtS4/view?usp=sharing' },
+                    ]
+                },
+                {
+                    aircraftName: 'Boeing 737-800',
+                    currentIndex: 0,
+                    variants: [
+                        { liveryTitle: 'Standard Livery', sim: 'MSFS2024', addon: 'PMDG 737-800', img: 'https://images.unsplash.com/photo-1616140026362-e6e76839d33b?q=80&w=600&auto=format&fit=crop', downloadUrl: '#' },
+                    ]
+                },
+                {
+                    aircraftName: 'Airbus A350-900',
+                    currentIndex: 0,
+                    variants: [
+                        { liveryTitle: 'Standard Livery', sim: 'MSFS2024', addon: 'iniBuilds A350', img: 'https://iili.io/CLuF0Bt.png', downloadUrl: 'https://drive.google.com/file/d/1OXrSu9cfmzLvobnqyln8JnxIOjAfBMJR/view?usp=sharing' },
+                    ]
+                },
+                {
+                    aircraftName: 'Airbus A380X',
+                    currentIndex: 0,
+                    variants: [
+                        { liveryTitle: 'Standard Flagship Livery', sim: 'MSFS2020', addon: 'FlyByWire A380X', img: 'https://static.wixstatic.com/media/e3f3e4_7f935d0c95164144a22580596e0a0358~mv2.png/v1/fill/w_1280,h_664,al_c,q_90,usm_0.66_1.00_0.01,enc_auto/e3f3e4_7f935d0c95164144a22580596e0a0358~mv2.png', downloadUrl: '#' },
+                    ]
+                }
+            ];
+
+            let activeFilter = 'ALL';
+
+            function buildFilters() {
+                const filtersContainer = document.getElementById('dcFilters');
+                const sims = new Set(['ALL']);
+
+                aircraftData.forEach(ac => {
+                    ac.variants.forEach(v => {
+                        if (v.sim && v.sim !== 'N/A') {
+                            sims.add(v.sim);
+                        }
+                    });
+                });
+
+                filtersContainer.innerHTML = '';
+                sims.forEach(sim => {
+                    const btn = document.createElement('button');
+                    btn.className = `dc-filter-btn ${sim === activeFilter ? 'active' : ''}`;
+                    btn.textContent = sim;
+                    btn.onclick = () => {
+                        activeFilter = sim;
+                        buildFilters();
+                        renderCards();
+                    };
+                    filtersContainer.appendChild(btn);
+                });
+            }
+
+            function renderCards() {
+                const container = document.getElementById('dcGrid');
+                container.innerHTML = '';
+
+                aircraftData.forEach((ac, acIndex) => {
+                    const matchingVariants = ac.variants.filter(v => activeFilter === 'ALL' || v.sim === activeFilter);
+
+                    if (matchingVariants.length === 0) return;
+
+                    if (ac.currentIndex >= matchingVariants.length) {
+                        ac.currentIndex = 0;
+                    }
+
+                    const currentVar = matchingVariants[ac.currentIndex];
+
+                    const card = document.createElement('div');
+                    card.className = 'dc-card';
+
+                    const navBtnsHtml = `
+                        <button class="dc-slider-btn prev" onclick="window.dcChangeVariant(${acIndex}, -1)">‹</button>
+                        <button class="dc-slider-btn next" onclick="window.dcChangeVariant(${acIndex}, 1)">›</button>
+                    `;
+
+                    // Używamy bezpiecznego przycisku wywołującego JS window.open zamiast tagu <a>, co omija blokady ramek
+                    card.innerHTML = `
+                        <div class="dc-card-hero">
+                            <img src="${currentVar.img}" alt="${ac.aircraftName}" class="dc-card-image">
+                            <div class="dc-card-badge">${currentVar.addon} / ${currentVar.sim}</div>
+                            ${navBtnsHtml}
+                        </div>
+                        <div class="dc-card-body">
+                            <div class="dc-card-title">${ac.aircraftName}</div>
+                            <div class="dc-card-subtitle">${currentVar.liveryTitle} (${ac.currentIndex + 1}/${matchingVariants.length})</div>
+                            
+                            <div class="dc-card-actions">
+                                <button onclick="window.open('${currentVar.downloadUrl}', '_blank')" class="dc-download-btn">
+                                    DOWNLOAD LIVERY
+                                </button>
+                            </div>
+                        </div>
+                    `;
+                    container.appendChild(card);
+                });
+            }
+
+            window.dcChangeVariant = function(acIndex, dir) {
+                const ac = aircraftData[acIndex];
+                const matchingVariants = ac.variants.filter(v => activeFilter === 'ALL' || v.sim === activeFilter);
+                
+                ac.currentIndex += dir;
+                if (ac.currentIndex < 0) {
+                    ac.currentIndex = matchingVariants.length - 1;
+                } else if (ac.currentIndex >= matchingVariants.length) {
+                    ac.currentIndex = 0;
+                }
+                renderCards();
+            };
+
+            buildFilters();
+            renderCards();
+        })();
+    </script>
+</div>
