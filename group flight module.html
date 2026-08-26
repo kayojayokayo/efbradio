@@ -1,0 +1,334 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>EFB - Lot Grupowy (Local P2P)</title>
+    <style>
+        :root {
+            --bg-color: #12141c;
+            --panel-bg: #1a1e29;
+            --accent-color: #3b82f6;
+            --accent-hover: #2563eb;
+            --text-color: #f3f4f6;
+            --text-muted: #9ca3af;
+            --border-color: #2a303c;
+            --success-color: #10b981;
+            --danger-color: #ef4444;
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+
+        body {
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            padding: 15px;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+
+        header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+            border-bottom: 1px solid var(--border-color);
+            padding-bottom: 10px;
+        }
+
+        h1 { font-size: 1.2rem; color: var(--accent-color); display: flex; align-items: center; gap: 8px; }
+
+        .status-badge {
+            font-size: 0.75rem;
+            padding: 4px 10px;
+            border-radius: 12px;
+            background: rgba(16, 185, 129, 0.15);
+            color: var(--success-color);
+            border: 1px solid var(--success-color);
+        }
+
+        .container {
+            display: grid;
+            grid-template-columns: 2fr 1fr;
+            grid-template-rows: 1fr auto;
+            gap: 15px;
+            flex: 1;
+            overflow: hidden;
+        }
+
+        .chat-section {
+            background: var(--panel-bg);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        .chat-messages {
+            flex: 1;
+            padding: 12px;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            font-size: 0.9rem;
+        }
+
+        .message {
+            background: rgba(255, 255, 255, 0.03);
+            padding: 8px 10px;
+            border-radius: 6px;
+            border-left: 3px solid var(--accent-color);
+        }
+
+        .message .sender { font-weight: bold; font-size: 0.8rem; color: var(--accent-color); margin-bottom: 2px; }
+
+        .chat-input-area {
+            display: flex;
+            padding: 10px;
+            background: rgba(0, 0, 0, 0.2);
+            border-top: 1px solid var(--border-color);
+            gap: 8px;
+        }
+
+        input, button {
+            background: var(--bg-color);
+            border: 1px solid var(--border-color);
+            color: var(--text-color);
+            padding: 8px 12px;
+            border-radius: 4px;
+            outline: none;
+            font-size: 0.9rem;
+        }
+
+        input:focus { border-color: var(--accent-color); }
+        .chat-input-area input { flex: 1; }
+
+        button {
+            background: var(--accent-color);
+            border: none;
+            cursor: pointer;
+            font-weight: 600;
+            transition: background 0.2s;
+        }
+        button:hover { background: var(--accent-hover); }
+
+        .sidebar-section { display: flex; flex-direction: column; gap: 15px; }
+
+        .card {
+            background: var(--panel-bg);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            padding: 12px;
+        }
+
+        .card h3 { font-size: 0.95rem; margin-bottom: 8px; color: var(--text-muted); border-bottom: 1px solid var(--border-color); padding-bottom: 5px; }
+
+        .pilot-list { list-style: none; max-height: 180px; overflow-y: auto; }
+        .pilot-item { display: flex; justify-content: space-between; font-size: 0.85rem; padding: 6px 0; border-bottom: 1px dashed rgba(255, 255, 255, 0.05); }
+
+        .ptt-control {
+            background: var(--panel-bg);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            padding: 15px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            grid-column: span 2;
+        }
+
+        .ptt-status { display: flex; align-items: center; gap: 12px; }
+
+        .mic-indicator {
+            width: 16px;
+            height: 16px;
+            border-radius: 50%;
+            background: var(--danger-color);
+            transition: all 0.2s;
+        }
+
+        .mic-indicator.active {
+            background: var(--success-color);
+            transform: scale(1.25);
+            box-shadow: 0 0 12px var(--success-color);
+        }
+
+        .ptt-btn {
+            background: #374151;
+            border: 2px solid var(--border-color);
+            color: var(--text-color);
+            padding: 10px 22px;
+            font-weight: bold;
+            border-radius: 6px;
+            cursor: pointer;
+            user-select: none;
+        }
+        .ptt-btn.active { background: var(--success-color); border-color: #059669; }
+    </style>
+</head>
+<body>
+
+    <header>
+        <h1>✈️ EFB Local Group Flight <span style="font-size: 0.8rem; color: var(--text-muted);">HTML-only Channel</span></h1>
+        <div class="status-badge" id="connection-status">● Aktywny lokalnie</div>
+    </header>
+
+    <div class="container">
+        <!-- Czat Tekstowy -->
+        <div class="chat-section">
+            <div class="chat-messages" id="chat-messages">
+                <div class="message">
+                    <div class="sender">System</div>
+                    <div class="text">Moduł zainicjalizowany. Wiadomości i powiadomienia synchronizują się w czasie rzeczywistym między otwartymi oknami.</div>
+                </div>
+            </div>
+            <div class="chat-input-area">
+                <input type="text" id="pilot-name" placeholder="Callsign" style="max-width: 130px;" value="CAP_Kamil">
+                <input type="text" id="chat-input" placeholder="Wpisz wiadomość..." autocomplete="off">
+                <button id="send-btn">Wyślij</button>
+            </div>
+        </div>
+
+        <!-- Panel boczny -->
+        <div class="sidebar-section">
+            <div class="card">
+                <h3>Aktywni w Sesji</h3>
+                <ul class="pilot-list" id="pilot-list">
+                    <li class="pilot-item"><span>CAP_Kamil</span> <span style="color:var(--success-color)">Online</span></li>
+                </ul>
+            </div>
+            <div class="card">
+                <h3>Informacje PTT</h3>
+                <p style="font-size: 0.82rem; color: var(--text-muted); line-height: 1.4;">
+                    Przytrzymaj klawisz <b>[V]</b>, aby aktywować mikrofon (status PTT przesyła się do innych instancji).
+                </p>
+            </div>
+        </div>
+
+        <!-- Panel Głosowy PTT -->
+        <div class="ptt-control">
+            <div class="ptt-status">
+                <div class="mic-indicator" id="mic-indicator"></div>
+                <div>
+                    <strong>Kanał Głosowy PTT</strong>
+                    <div style="font-size: 0.8rem; color: var(--text-muted);">Skrót: <b>[V]</b></div>
+                </div>
+            </div>
+            <button class="ptt-btn" id="ptt-btn">NACIŚNIJ I MÓW [V]</button>
+        </div>
+    </div>
+
+    <script>
+        // Kanał komunikacyjny HTML5 (działa między kartami/oknami bez zewnętrznego serwera)
+        const flightChannel = new BroadcastChannel('comet_efb_group_flight');
+
+        const chatMessages = document.getElementById('chat-messages');
+        const chatInput = document.getElementById('chat-input');
+        const sendBtn = document.getElementById('send-btn');
+        const pilotNameInput = document.getElementById('pilot-name');
+        
+        const pttBtn = document.getElementById('ptt-btn');
+        const micIndicator = document.getElementById('mic-indicator');
+
+        let isTransmitting = false;
+        let localStream = null;
+
+        // Dodawanie wiadomości do okna czatu
+        function appendMessage(sender, text) {
+            const div = document.createElement('div');
+            div.className = 'message';
+            div.innerHTML = `<div class="sender">${sender}</div><div class="text">${text}</div>`;
+            chatMessages.appendChild(div);
+            chatMessages.scrollTop = chatMessages.scrollHeight;
+        }
+
+        // Wysyłanie wiadomości tekstowej przez kanał przeglądarki
+        sendBtn.addEventListener('click', () => {
+            const text = chatInput.value.trim();
+            const sender = pilotNameInput.value.trim() || 'PILOT';
+            if (!text) return;
+
+            appendMessage(sender, text);
+            
+            // Nadaj komunikat do innych otwartych okien/kart z tym plikiem
+            flightChannel.postMessage({
+                type: 'CHAT',
+                sender: sender,
+                text: text
+            });
+
+            chatInput.value = '';
+        });
+
+        chatInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') sendBtn.click();
+        });
+
+        // Odbieranie danych z innych okien/kart
+        flightChannel.onmessage = (event) => {
+            const data = event.data;
+            if (data.type === 'CHAT') {
+                appendMessage(data.sender, data.text);
+            } else if (data.type === 'PTT_STATUS') {
+                // Tutaj inne okno informuje, że ktoś nadaje głos
+                if (data.active) {
+                    micIndicator.style.background = '#3b82f6'; // Niebieski dla zdalnego nadawania
+                } else {
+                    micIndicator.style.background = 'var(--danger-color)';
+                }
+            }
+        };
+
+        // --- OBSŁUGA MIKROFONU I PTT ---
+        async function initMic() {
+            try {
+                localStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+            } catch (err) {
+                console.warn("Brak dostępu do mikrofonu:", err);
+            }
+        }
+        initMic();
+
+        function startPTT() {
+            if (isTransmitting) return;
+            isTransmitting = true;
+            micIndicator.classList.add('active');
+            pttBtn.classList.add('active');
+            pttBtn.textContent = 'NADAWANIE... [V]';
+
+            // Wyślij sygnał PTT do pozostałych okien
+            flightChannel.postMessage({ type: 'PTT_STATUS', active: true });
+        }
+
+        function stopPTT() {
+            if (!isTransmitting) return;
+            isTransmitting = false;
+            micIndicator.classList.remove('active');
+            pttBtn.classList.remove('active');
+            pttBtn.textContent = 'NACIŚNIJ I MÓW [V]';
+
+            // Wyślij sygnał końca PTT
+            flightChannel.postMessage({ type: 'PTT_STATUS', active: false });
+        }
+
+        // Obsługa myszy i klawiatury [V]
+        pttBtn.addEventListener('mousedown', startPTT);
+        window.addEventListener('mouseup', stopPTT);
+
+        window.addEventListener('keydown', (e) => {
+            if ((e.code === 'KeyV' || e.key === 'v') && !isTransmitting && document.activeElement !== chatInput && document.activeElement !== pilotNameInput) {
+                startPTT();
+            }
+        });
+
+        window.addEventListener('keyup', (e) => {
+            if (e.code === 'KeyV' || e.key === 'v') {
+                stopPTT();
+            }
+        });
+    </script>
+</body>
+</html>
